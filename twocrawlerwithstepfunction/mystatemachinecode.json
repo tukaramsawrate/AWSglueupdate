@@ -1,0 +1,99 @@
+{
+  "Comment": "A description of my state machine",
+  "StartAt": "StartCrawler",
+  "States": {
+    "StartCrawler": {
+      "Type": "Task",
+      "Parameters": {
+        "Name": "secondcr"
+      },
+      "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
+      "Next": "GetCrawler"
+    },
+    "GetCrawler": {
+      "Type": "Task",
+      "Next": "Choice",
+      "Parameters": {
+        "Name": "secondcr"
+      },
+      "Resource": "arn:aws:states:::aws-sdk:glue:getCrawler"
+    },
+    "Choice": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.Crawler.State",
+          "StringEquals": "RUNNING",
+          "Next": "Wait"
+        }
+      ],
+      "Default": "StartCrawler (1)"
+    },
+    "Wait": {
+      "Type": "Wait",
+      "Seconds": 5,
+      "Next": "GetCrawler"
+    },
+    "StartCrawler (1)": {
+      "Type": "Task",
+      "Parameters": {
+        "Name": "startsecondcrawler"
+      },
+      "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
+      "Next": "GetCrawler (1)"
+    },
+    "GetCrawler (1)": {
+      "Type": "Task",
+      "Parameters": {
+        "Name": "startsecondcrawler"
+      },
+      "Resource": "arn:aws:states:::aws-sdk:glue:getCrawler",
+      "Next": "Choice (1)"
+    },
+    "Choice (1)": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.Crawler.State",
+          "StringEquals": "RUNNING",
+          "Next": "Wait (1)"
+        }
+      ],
+      "Default": "Athena StartQueryExecution"
+    },
+    "Athena StartQueryExecution": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "select e1.ename,d1.loc from forcrawlerdb.empf e1 join forcrawlerdb.dept d1 on e1.deptno=d1.deptno;",
+        "WorkGroup": "primary",
+        "ResultConfiguration": {
+          "OutputLocation": "s3://forathena2/output1/"
+        }
+      },
+      "Next": "Athena GetQueryExecution"
+    },
+    "Wait (1)": {
+      "Type": "Wait",
+      "Seconds": 5,
+      "Next": "GetCrawler (1)"
+    },
+    "Athena GetQueryExecution": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:getQueryExecution",
+      "Parameters": {
+        "QueryExecutionId.$": "$.QueryExecution.QueryExecutionId "
+      },
+      "Next": "SNS Publish"
+    },
+    "SNS Publish": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:ap-south-1:056166221790:forstepfun",
+        "Message.$": "$.ResultSet.Rows"
+      },
+      "End": true
+    }
+  }
+}
